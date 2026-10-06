@@ -10,6 +10,14 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: courses
+    description: StudyGraph courses
+  - name: sources
+    description: Uploaded and linked learning sources
+  - name: ingestion
+    description: Source processing jobs
+  - name: storage
+    description: Persistent upload storage
 paths:
   /healthz:
     get:
@@ -24,6 +32,191 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /courses:
+    get:
+      operationId: listCourses
+      tags: [courses]
+      summary: List courses with library totals
+      responses:
+        "200":
+          description: Courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+    post:
+      operationId: createCourse
+      tags: [courses]
+      summary: Create a course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseInput"
+      responses:
+        "201":
+          description: Created course
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+  /courses/{courseId}/summary:
+    get:
+      operationId: getCourseSummary
+      tags: [courses]
+      summary: Get course ingestion totals
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseSummary"
+        "404":
+          description: Course not found
+  /sources:
+    get:
+      operationId: listSources
+      tags: [sources]
+      summary: List sources in the library
+      parameters:
+        - in: query
+          name: courseId
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Source"
+    post:
+      operationId: registerUploadedSource
+      tags: [sources]
+      summary: Register an uploaded source and queue ingestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadedSourceInput"
+      responses:
+        "202":
+          description: Source accepted for ingestion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Source"
+        "404":
+          description: Course not found
+  /sources/youtube:
+    post:
+      operationId: addYoutubeSource
+      tags: [sources]
+      summary: Add a YouTube source and queue ingestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/YoutubeSourceInput"
+      responses:
+        "202":
+          description: YouTube source accepted for ingestion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Source"
+        "400":
+          description: Invalid YouTube URL
+        "404":
+          description: Course not found
+  /sources/{sourceId}:
+    get:
+      operationId: getSource
+      tags: [sources]
+      summary: Get a source and its ingestion status
+      parameters:
+        - in: path
+          name: sourceId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Source"
+        "404":
+          description: Source not found
+    delete:
+      operationId: deleteSource
+      tags: [sources]
+      summary: Delete a source and its extracted content
+      parameters:
+        - in: path
+          name: sourceId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Source deleted
+        "404":
+          description: Source not found
+  /ingestion-jobs/{jobId}:
+    get:
+      operationId: getIngestionJob
+      tags: [ingestion]
+      summary: Get live ingestion progress
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ingestion job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionJob"
+        "404":
+          description: Job not found
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Create a presigned private upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlInput"
+      responses:
+        "200":
+          description: Upload URL and private object path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrl"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +226,143 @@ components:
           type: string
       required:
         - status
+    CourseInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 2000
+      required: [name]
+    Course:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        sourceCount: { type: integer }
+        unitCount: { type: integer }
+        readySourceCount: { type: integer }
+        processingSourceCount: { type: integer }
+        failedSourceCount: { type: integer }
+      required:
+        - id
+        - name
+        - description
+        - createdAt
+        - sourceCount
+        - unitCount
+        - readySourceCount
+        - processingSourceCount
+        - failedSourceCount
+    CourseSummary:
+      type: object
+      properties:
+        courseId: { type: string }
+        sourceCount: { type: integer }
+        unitCount: { type: integer }
+        topicCount: { type: integer }
+        readySourceCount: { type: integer }
+        processingSourceCount: { type: integer }
+        failedSourceCount: { type: integer }
+      required:
+        - courseId
+        - sourceCount
+        - unitCount
+        - topicCount
+        - readySourceCount
+        - processingSourceCount
+        - failedSourceCount
+    Source:
+      type: object
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        title: { type: string }
+        originalFilename: { type: ["string", "null"] }
+        sourceType: { type: string, enum: [pdf, pptx, video] }
+        sourceUrl: { type: ["string", "null"] }
+        language: { type: string }
+        status: { type: string, enum: [queued, processing, ready, failed] }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        currentStep: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+        unitsCreated: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required:
+        - id
+        - courseId
+        - title
+        - originalFilename
+        - sourceType
+        - sourceUrl
+        - language
+        - status
+        - progress
+        - currentStep
+        - error
+        - unitsCreated
+        - createdAt
+    IngestionJob:
+      type: object
+      properties:
+        id: { type: string }
+        sourceId: { type: string }
+        status: { type: string, enum: [queued, processing, ready, failed] }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        currentStep: { type: ["string", "null"] }
+        unitsCreated: { type: integer }
+        error: { type: ["string", "null"] }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - sourceId
+        - status
+        - progress
+        - currentStep
+        - unitsCreated
+        - error
+        - updatedAt
+    UploadedSourceInput:
+      type: object
+      properties:
+        courseId: { type: string }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        originalFilename: { type: string, minLength: 1, maxLength: 255 }
+        sourceType: { type: string, enum: [pdf, pptx, video] }
+        objectPath: { type: string, minLength: 1 }
+        mimeType: { type: string }
+        language: { type: string, default: auto }
+      required:
+        - courseId
+        - title
+        - originalFilename
+        - sourceType
+        - objectPath
+        - mimeType
+    YoutubeSourceInput:
+      type: object
+      properties:
+        courseId: { type: string }
+        url: { type: string, format: uri }
+        title: { type: string, maxLength: 300 }
+        language: { type: string, default: auto }
+      required: [courseId, url]
+    UploadUrlInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 5368709120 }
+        contentType: { type: string }
+      required: [name, size, contentType]
+    UploadUrl:
+      type: object
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string }
+      required: [uploadURL, objectPath]
 
