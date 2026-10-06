@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "StudyGraph"
+description = "An AI-powered study companion that ingests lecture materials, preserves page, slide, and timestamp citations, and organizes a course library for grounded learning."
+version = "1.0.0"
+id = "artifacts/studygraph"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25090
+
+[services.development]
+run = "pnpm --filter @workspace/studygraph run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/studygraph", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/studygraph/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25090"
+BASE_PATH = "/"
