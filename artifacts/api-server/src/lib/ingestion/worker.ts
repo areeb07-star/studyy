@@ -53,6 +53,7 @@ type UnitDraft = {
 type VisualDescription = {
   hasMeaningfulVisual: boolean;
   caption: string | null;
+  ocrText: string | null;
 };
 
 type TranscriptSegment = {
@@ -87,6 +88,7 @@ async function setProgress(
   error: string | null = null,
   unitsCreated?: number,
 ): Promise<void> {
+  assertNotCancelled(sourceId);
   const updatedAt = new Date();
   const values = {
     status,
@@ -223,9 +225,16 @@ function splitText(text: string, maxLength = 1400): string[] {
   return chunks;
 }
 
-async function describeImage(imagePath: string): Promise<VisualDescription> {
+async function describeImage(
+  imagePath: string,
+  extractedText: string,
+): Promise<VisualDescription> {
   const image = await readFile(imagePath);
-  const key = `vision:${modelConfig.vision}:${sha256(image)}`;
+  const cacheMaterial = Buffer.concat([
+    image,
+    Buffer.from(`\n${extractedText.slice(0, 7000)}`),
+  ]);
+  const key = `vision:${modelConfig.vision}:${sha256(cacheMaterial)}`;
   return cachedAI<VisualDescription>(key, modelConfig.vision, async () => {
     const completion = await withRetry(() =>
       openai().chat.completions.create({
@@ -235,14 +244,14 @@ async function describeImage(imagePath: string): Promise<VisualDescription> {
           {
             role: "system",
             content:
-              "Describe only meaningful diagrams, charts, equations, tables, or instructional images visible in the supplied lecture page. Do not repeat body text. Do not infer unreadable labels or facts. If there is no meaningful visual, return {\"hasMeaningfulVisual\":false,\"caption\":null}. Otherwise return concise factual JSON: {\"hasMeaningfulVisual\":true,\"caption\":\"...\"}.",
+              "Read a lecture page faithfully. Extract only clearly legible printed text visible in the image that is not already present in the supplied text layer; preserve wording, numbers, and equations, and do not guess obscured text. Describe meaningful diagrams, charts, equations, tables, or instructional images in a concise caption, in the material's language where clear. Never infer facts. Always return all JSON fields: {\"hasMeaningfulVisual\":false,\"caption\":null,\"ocrText\":null} when no visual or extra readable text is present; otherwise set the applicable caption and/or ocrText and set other fields to null.",
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "Provide an accurate, source-grounded caption for this page image.",
+                text: `Extract source text and figure details from this page. Existing selectable text (do not repeat it):\n${extractedText.slice(0, 7000) || "(none; OCR visible text from the image)"}`,
               },
               {
                 type: "image_url",
@@ -254,26 +263,38 @@ async function describeImage(imagePath: string): Promise<VisualDescription> {
             ],
           },
         ],
-        max_completion_tokens: 350,
+        max_completion_tokens: 2800,
       }),
     );
     const content = completion.choices[0]?.message.content;
     if (!content) throw new Error("The vision model returned an empty response.");
     const parsed = JSON.parse(content) as Partial<VisualDescription>;
-    if (typeof parsed.hasMeaningfulVisual !== "boolean") {
-      throw new Error("The vision model returned an invalid caption response.");
+    if (
+      typeof parsed.hasMeaningfulVisual !== "boolean" ||
+      (parsed.caption !== null && typeof parsed.caption !== "string") ||
+      (parsed.ocrText !== null && typeof parsed.ocrText !== "string")
+    ) {
+      throw new Error("The vision model returned an invalid OCR/caption response.");
     }
     const caption =
       parsed.hasMeaningfulVisual && typeof parsed.caption === "string"
         ? parsed.caption.trim().slice(0, 1800)
         : null;
-    return { hasMeaningfulVisual: parsed.hasMeaningfulVisual, caption };
+    return {
+      hasMeaningfulVisual: parsed.hasMeaningfulVisual,
+      caption,
+      ocrText:
+        typeof parsed.ocrText === "string"
+          ? parsed.ocrText.trim().slice(0, 12000) || null
+          : null,
+    };
   });
 }
 
 function addDocumentPageUnits(
   page: DocumentPage,
   caption: string | null,
+  ocrText: string | null,
   imagePath: string | undefined,
   language: string,
 ): UnitDraft[] {
@@ -281,7 +302,9 @@ function addDocumentPageUnits(
     page.type === "slide"
       ? { type: "slide", slide: page.number, ...(imagePath ? { imagePath } : {}) }
       : { type: "page", page: page.number, ...(imagePath ? { imagePath } : {}) };
-  const chunks = splitText(page.text);
+  const chunks = splitText(
+    [page.text, ocrText].filter((text): text is string => Boolean(text)).join("\n\n"),
+  );
   if (!chunks.length && caption) chunks.push(caption);
   if (!chunks.length) return [];
   return chunks.map((text, index) => ({
@@ -333,10 +356,11 @@ async function processDocument(
   let completed = 0;
   let progressWrites = Promise.resolve();
   const drafts = await mapLimit(manifest.pages, 3, async (page) => {
-    const description = await describeImage(page.image);
+    const description = await describeImage(page.image, page.text);
     const caption = description.caption;
+    const ocrText = description.ocrText;
     let imagePath: string | undefined;
-    if (page.text.trim() || caption) {
+    if (page.text.trim() || ocrText || caption) {
       imagePath = await storage.saveDerivedObject({
         sourceId: source.id,
         fileName: `${page.type}-${String(page.number).padStart(4, "0")}.png`,
@@ -356,7 +380,13 @@ async function processDocument(
       ),
     );
     await progressWrites;
-    return addDocumentPageUnits(page, caption, imagePath, source.language);
+    return addDocumentPageUnits(
+      page,
+      caption,
+      ocrText,
+      imagePath,
+      source.language,
+    );
   });
   return drafts.flat();
 }
@@ -517,7 +547,7 @@ async function processVideo(
     const framePath = join(framesDir, name);
     const bytes = await readFile(framePath);
     const timeSec = Math.min(duration, index * VIDEO_FRAME_INTERVAL_SEC);
-    const key = `video-vision:${modelConfig.vision}:${sha256(bytes)}`;
+    const key = `video-vision-v2:${modelConfig.vision}:${sha256(bytes)}`;
     const description = await cachedAI<VisualDescription>(
       key,
       modelConfig.vision,
@@ -530,7 +560,7 @@ async function processVideo(
               {
                 role: "system",
                 content:
-                  "Describe only meaningful instructional visuals, diagrams, equations, charts, or on-screen text. Do not invent speech or events. If there is no useful visual, return {\"hasMeaningfulVisual\":false,\"caption\":null}; otherwise return concise factual JSON {\"hasMeaningfulVisual\":true,\"caption\":\"...\"}.",
+                  "Describe meaningful instructional visuals in the material's language where clear. Transcribe only clearly readable instructional on-screen text, preserving wording, numbers, and equations. Do not infer or invent speech or events. Always return all JSON fields: {\"hasMeaningfulVisual\":false,\"caption\":null,\"ocrText\":null} when there is no useful visual or readable on-screen text; otherwise set the applicable caption and/or ocrText and set other fields to null.",
               },
               {
                 role: "user",
@@ -549,14 +579,18 @@ async function processVideo(
                 ],
               },
             ],
-            max_completion_tokens: 350,
+            max_completion_tokens: 1200,
           }),
         );
         const content = completion.choices[0]?.message.content;
         if (!content) throw new Error("The vision model returned an empty response.");
         const parsed = JSON.parse(content) as Partial<VisualDescription>;
-        if (typeof parsed.hasMeaningfulVisual !== "boolean") {
-          throw new Error("The vision model returned an invalid frame caption.");
+        if (
+          typeof parsed.hasMeaningfulVisual !== "boolean" ||
+          (parsed.caption !== null && typeof parsed.caption !== "string") ||
+          (parsed.ocrText !== null && typeof parsed.ocrText !== "string")
+        ) {
+          throw new Error("The vision model returned an invalid frame OCR/caption.");
         }
         return {
           hasMeaningfulVisual: parsed.hasMeaningfulVisual,
@@ -564,15 +598,25 @@ async function processVideo(
             parsed.hasMeaningfulVisual && typeof parsed.caption === "string"
               ? parsed.caption.trim().slice(0, 1800)
               : null,
+          ocrText:
+            typeof parsed.ocrText === "string"
+              ? parsed.ocrText.trim().slice(0, 6000) || null
+              : null,
         };
       },
     );
-    return { timeSec, framePath, bytes, caption: description.caption };
+    return {
+      timeSec,
+      framePath,
+      bytes,
+      caption: description.caption,
+      ocrText: description.ocrText,
+    };
   });
 
   const imagePaths = await Promise.all(
     frameDescriptions.map(async (frame, index) => {
-      if (!frame.caption) return undefined;
+      if (!frame.caption && !frame.ocrText) return undefined;
       return storage.saveDerivedObject({
         sourceId: source.id,
         fileName: `frame-${String(index + 1).padStart(4, "0")}.jpg`,
@@ -596,10 +640,13 @@ async function processVideo(
       }
     }
     const caption = closest >= 0 ? frameDescriptions[closest].caption : null;
+    const ocrText = closest >= 0 ? frameDescriptions[closest].ocrText : null;
     const imagePath = closest >= 0 ? imagePaths[closest] : undefined;
-    if (closest >= 0 && caption) assignedFrames.add(closest);
+    if (closest >= 0 && (caption || ocrText)) assignedFrames.add(closest);
     return {
-      text: segment.text,
+      text: [segment.text, ocrText ? `On-screen text: ${ocrText}` : ""]
+        .filter(Boolean)
+        .join("\n\n"),
       figureCaption: caption ?? null,
       locator: {
         type: "video",
@@ -612,10 +659,16 @@ async function processVideo(
   });
 
   frameDescriptions.forEach((frame, index) => {
-    if (!frame.caption || assignedFrames.has(index)) return;
+    if ((!frame.caption && !frame.ocrText) || assignedFrames.has(index)) return;
     const start = frame.timeSec;
+    const frameText = [
+      frame.caption ? `Visual scene: ${frame.caption}` : "",
+      frame.ocrText ? `On-screen text: ${frame.ocrText}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     drafts.push({
-      text: `Visual scene: ${frame.caption}`,
+      text: frameText,
       figureCaption: frame.caption,
       locator: {
         type: "video",
@@ -663,6 +716,9 @@ async function embedUnits(
           model: modelConfig.embedding,
           input: missingIndexes.map((index) => texts[index]),
           encoding_format: "float",
+          ...(modelConfig.embedding.startsWith("text-embedding-3-")
+            ? { dimensions: 1536 }
+            : {}),
         }),
       );
       const ordered = [...response.data].sort((a, b) => a.index - b.index);
@@ -743,7 +799,7 @@ async function buildTaxonomy(
             {
               role: "system",
               content:
-                "Organize the supplied study units into a concise topic hierarchy and atomic concepts. Use only ideas supported by the excerpts. Return JSON {\"topics\":[{\"name\":\"...\",\"description\":\"...\",\"concepts\":[{\"name\":\"...\",\"description\":\"...\",\"unitIndexes\":[0],\"prerequisiteNames\":[]}]}]}. Each concept must cite one or more supplied unitIndexes. Do not invent concepts or prerequisite relationships. Use at most 8 topics and 8 concepts per topic for this batch. If the excerpts contain no teachable content, return {\"topics\":[]}.",
+                "Organize the supplied study units into a concise topic hierarchy and atomic concepts. Use only ideas supported by the excerpts, and use their language for names and descriptions where clear. Return JSON {\"topics\":[{\"name\":\"...\",\"description\":\"...\",\"concepts\":[{\"name\":\"...\",\"description\":\"...\",\"unitIndexes\":[0],\"prerequisiteNames\":[]}]}]}. Each concept must cite one or more supplied unitIndexes. Do not invent concepts or prerequisite relationships. Use at most 8 topics and 8 concepts per topic for this batch. If the excerpts contain no teachable content, return {\"topics\":[]}.",
             },
             {
               role: "user",
@@ -929,7 +985,10 @@ async function processSource(sourceId: string): Promise<void> {
     .from(sourcesTable)
     .where(eq(sourcesTable.id, sourceId))
     .limit(1);
-  if (!source) return;
+  if (!source) {
+    cancelledSources.delete(sourceId);
+    return;
+  }
   let step = "Preparing source";
   const workDir = await mkdtemp(join(tmpdir(), "studygraph-"));
   try {
@@ -984,6 +1043,7 @@ async function processSource(sourceId: string): Promise<void> {
       inserted.length,
     );
   } catch (error) {
+    if (cancelledSources.has(sourceId)) return;
     const message = sourceError(error);
     logger.error({ sourceId, step, error: message }, "StudyGraph ingestion failed");
     await setProgress(
@@ -1000,11 +1060,29 @@ async function processSource(sourceId: string): Promise<void> {
     );
   } finally {
     await rm(workDir, { recursive: true, force: true });
+    if (cancelledSources.delete(sourceId)) {
+      await storage.deleteDerivedObjects(sourceId).catch((error) =>
+        logger.warn({ sourceId, error }, "Could not remove cancelled source assets"),
+      );
+    }
   }
 }
 
 let running = false;
+let activeSourceId: string | null = null;
 const waiting = new Set<string>();
+const cancelledSources = new Set<string>();
+
+function assertNotCancelled(sourceId: string): void {
+  if (cancelledSources.has(sourceId)) {
+    throw new Error("Source processing was cancelled.");
+  }
+}
+
+export function cancelIngestion(sourceId: string): void {
+  waiting.delete(sourceId);
+  if (activeSourceId === sourceId) cancelledSources.add(sourceId);
+}
 
 export function queueIngestion(sourceId: string): void {
   waiting.add(sourceId);
@@ -1018,7 +1096,13 @@ async function drainQueue(): Promise<void> {
     while (waiting.size) {
       const sourceId = waiting.values().next().value as string;
       waiting.delete(sourceId);
-      await processSource(sourceId);
+      activeSourceId = sourceId;
+      try {
+        await processSource(sourceId);
+      } finally {
+        activeSourceId = null;
+        cancelledSources.delete(sourceId);
+      }
     }
   } finally {
     running = false;

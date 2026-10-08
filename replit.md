@@ -4,7 +4,7 @@ StudyGraph turns a student's course materials into an organized, source-linked s
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — API server on the configured `PORT` (the workspace default is port 5000).
+- `pnpm --filter @workspace/api-server run dev` — API server on the `PORT` injected by its managed workflow.
 - `pnpm --filter @workspace/studygraph run dev` — StudyGraph web app.
 - `pnpm -w run typecheck:libs` — typecheck shared libraries.
 - `pnpm --filter @workspace/api-server run typecheck` — typecheck the API.
@@ -56,4 +56,5 @@ Phase 1 provides account-protected course libraries, persistent PDF/PPTX/video/Y
 - After editing the OpenAPI contract, run codegen before using its generated API types.
 - Keep the pgvector extension enabled before pushing the StudyGraph schema.
 - The vector index is fixed to 1,536 dimensions; select an embedding model that supports that size.
+- Vite requires `PORT` and `BASE_PATH`; the managed workflow supplies both. When building outside it, set both explicitly.
 - Video ingestion currently accepts files up to 500 MB and two hours; document rendering caps a source at 500 pages/slides.

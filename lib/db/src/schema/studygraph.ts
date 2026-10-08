@@ -20,6 +20,39 @@ export type SourceLocator =
   | { type: "slide"; slide: number; imagePath?: string }
   | { type: "video"; start_sec: number; end_sec: number; imagePath?: string };
 
+export type StudyCitation = {
+  unitId: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceType: "pdf" | "pptx" | "video";
+  locator: SourceLocator;
+  excerpt: string;
+};
+
+export type StoredAssessmentQuestion = {
+  id: string;
+  prompt: string;
+  options: string[];
+  correctOption: number;
+  explanation: string;
+  citations: StudyCitation[];
+  conceptIds: string[];
+};
+
+export type StoredAssessmentAnswer = {
+  questionId: string;
+  selectedOption: number | null;
+};
+
+export type AssessmentQuestionFeedback = {
+  questionId: string;
+  selectedOption: number | null;
+  correctOption: number;
+  isCorrect: boolean;
+  explanation: string;
+  citations: StudyCitation[];
+};
+
 const vector = customType<{ data: number[]; driverData: string }>({
   dataType: () => "vector(1536)",
   toDriver: (value) => `[${value.join(",")}]`,
@@ -42,6 +75,23 @@ export const ingestionStatusEnum = pgEnum("studygraph_ingestion_status", [
   "processing",
   "ready",
   "failed",
+]);
+
+export const conceptMasteryEnum = pgEnum("studygraph_concept_mastery", [
+  "new",
+  "learning",
+  "mastered",
+]);
+
+export const assessmentDifficultyEnum = pgEnum("studygraph_assessment_difficulty", [
+  "easy",
+  "medium",
+  "hard",
+]);
+
+export const conversationRoleEnum = pgEnum("studygraph_conversation_role", [
+  "user",
+  "assistant",
 ]);
 
 export const coursesTable = pgTable(
@@ -228,6 +278,127 @@ export const aiCacheTable = pgTable("studygraph_ai_cache", {
     .notNull()
     .defaultNow(),
 });
+
+export const conversationsTable = pgTable(
+  "studygraph_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    ownerId: text("owner_id").notNull(),
+    title: text("title").notNull().default("New study session"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("studygraph_conversations_course_idx").on(table.courseId),
+    index("studygraph_conversations_owner_idx").on(table.ownerId),
+  ],
+);
+
+export const conversationMessagesTable = pgTable(
+  "studygraph_conversation_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversationsTable.id, { onDelete: "cascade" }),
+    role: conversationRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    citations: jsonb("citations").$type<StudyCitation[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("studygraph_messages_conversation_idx").on(
+      table.conversationId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const assessmentsTable = pgTable(
+  "studygraph_assessments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => coursesTable.id, { onDelete: "cascade" }),
+    ownerId: text("owner_id").notNull(),
+    topicId: uuid("topic_id").references(() => topicsTable.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    difficulty: assessmentDifficultyEnum("difficulty").notNull(),
+    questions: jsonb("questions")
+      .$type<StoredAssessmentQuestion[]>()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("studygraph_assessments_course_idx").on(table.courseId),
+    index("studygraph_assessments_owner_idx").on(table.ownerId),
+  ],
+);
+
+export const assessmentAttemptsTable = pgTable(
+  "studygraph_assessment_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => assessmentsTable.id, { onDelete: "cascade" }),
+    ownerId: text("owner_id").notNull(),
+    answers: jsonb("answers").$type<StoredAssessmentAnswer[]>().notNull(),
+    feedback: jsonb("feedback")
+      .$type<AssessmentQuestionFeedback[]>()
+      .notNull(),
+    score: integer("score").notNull(),
+    total: integer("total").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("studygraph_attempts_assessment_idx").on(
+      table.assessmentId,
+      table.createdAt,
+    ),
+    index("studygraph_attempts_owner_idx").on(table.ownerId),
+  ],
+);
+
+export const conceptProgressTable = pgTable(
+  "studygraph_concept_progress",
+  {
+    ownerId: text("owner_id").notNull(),
+    conceptId: uuid("concept_id")
+      .notNull()
+      .references(() => conceptsTable.id, { onDelete: "cascade" }),
+    confidence: integer("confidence").notNull().default(0),
+    mastery: conceptMasteryEnum("mastery").notNull().default("new"),
+    lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+    nextReviewAt: timestamp("next_review_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.conceptId] }),
+    index("studygraph_progress_owner_review_idx").on(
+      table.ownerId,
+      table.nextReviewAt,
+    ),
+  ],
+);
 
 export const insertCourseSchema = createInsertSchema(coursesTable).omit({
   id: true,

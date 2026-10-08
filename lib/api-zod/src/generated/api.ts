@@ -117,7 +117,7 @@ export const registerUploadedSourceBodyTitleMax = 300;
 export const registerUploadedSourceBodyOriginalFilenameMax = 255;
 
 
-export const registerUploadedSourceBodyLanguageDefault = `en`;
+export const registerUploadedSourceBodyLanguageDefault = `auto`;
 
 export const RegisterUploadedSourceBody = zod.object({
   "courseId": zod.string(),
@@ -156,7 +156,7 @@ export const RegisterUploadedSourceResponse = zod.object({
  */
 export const addYoutubeSourceBodyTitleMax = 300;
 
-export const addYoutubeSourceBodyLanguageDefault = `en`;
+export const addYoutubeSourceBodyLanguageDefault = `auto`;
 
 export const AddYoutubeSourceBody = zod.object({
   "courseId": zod.string(),
@@ -269,5 +269,524 @@ export const RequestUploadUrlResponse = zod.object({
   "uploadURL": zod.string().url(),
   "objectPath": zod.string()
 })
+
+
+/**
+ * @summary List tutoring conversations for a course
+ */
+export const ListStudyConversationsParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const ListStudyConversationsResponseItem = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "title": zod.string(),
+  "messageCount": zod.number().int(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListStudyConversationsResponse = zod.array(ListStudyConversationsResponseItem)
+
+
+/**
+ * @summary Create a tutoring conversation
+ */
+export const CreateStudyConversationParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const createStudyConversationBodyTitleMax = 160;
+
+
+
+export const CreateStudyConversationBody = zod.object({
+  "title": zod.string().max(createStudyConversationBodyTitleMax).optional()
+})
+
+export const CreateStudyConversationResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "title": zod.string(),
+  "messageCount": zod.number().int(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Read messages and their source citations
+ */
+export const ListConversationMessagesParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+
+
+export const listConversationMessagesResponseCitationsItemLocatorStartSecMin = 0;
+
+export const listConversationMessagesResponseCitationsItemLocatorEndSecMin = 0;
+
+
+
+export const ListConversationMessagesResponseItem = zod.object({
+  "id": zod.string(),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string(),
+  "citations": zod.array(zod.object({
+  "unitId": zod.string(),
+  "sourceId": zod.string(),
+  "sourceTitle": zod.string(),
+  "sourceType": zod.enum(['pdf', 'pptx', 'video']),
+  "locator": zod.object({
+  "type": zod.enum(['page', 'slide', 'video']),
+  "page": zod.number().int().min(1).optional(),
+  "slide": zod.number().int().min(1).optional(),
+  "start_sec": zod.number().min(listConversationMessagesResponseCitationsItemLocatorStartSecMin).optional(),
+  "end_sec": zod.number().min(listConversationMessagesResponseCitationsItemLocatorEndSecMin).optional(),
+  "imagePath": zod.string().nullish()
+}),
+  "excerpt": zod.string()
+})),
+  "createdAt": zod.coerce.date()
+})
+export const ListConversationMessagesResponse = zod.array(ListConversationMessagesResponseItem)
+
+
+/**
+ * @summary Ask a question grounded in course sources
+ */
+export const SendConversationMessageParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+export const sendConversationMessageBodyContentMin = 2;
+export const sendConversationMessageBodyContentMax = 6000;
+
+
+
+export const SendConversationMessageBody = zod.object({
+  "content": zod.string().min(sendConversationMessageBodyContentMin).max(sendConversationMessageBodyContentMax)
+})
+
+
+
+export const sendConversationMessageResponseUserMessageCitationsItemLocatorStartSecMin = 0;
+
+export const sendConversationMessageResponseUserMessageCitationsItemLocatorEndSecMin = 0;
+
+
+
+export const sendConversationMessageResponseAssistantMessageCitationsItemLocatorStartSecMin = 0;
+
+export const sendConversationMessageResponseAssistantMessageCitationsItemLocatorEndSecMin = 0;
+
+
+
+export const SendConversationMessageResponse = zod.object({
+  "userMessage": zod.object({
+  "id": zod.string(),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string(),
+  "citations": zod.array(zod.object({
+  "unitId": zod.string(),
+  "sourceId": zod.string(),
+  "sourceTitle": zod.string(),
+  "sourceType": zod.enum(['pdf', 'pptx', 'video']),
+  "locator": zod.object({
+  "type": zod.enum(['page', 'slide', 'video']),
+  "page": zod.number().int().min(1).optional(),
+  "slide": zod.number().int().min(1).optional(),
+  "start_sec": zod.number().min(sendConversationMessageResponseUserMessageCitationsItemLocatorStartSecMin).optional(),
+  "end_sec": zod.number().min(sendConversationMessageResponseUserMessageCitationsItemLocatorEndSecMin).optional(),
+  "imagePath": zod.string().nullish()
+}),
+  "excerpt": zod.string()
+})),
+  "createdAt": zod.coerce.date()
+}),
+  "assistantMessage": zod.object({
+  "id": zod.string(),
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string(),
+  "citations": zod.array(zod.object({
+  "unitId": zod.string(),
+  "sourceId": zod.string(),
+  "sourceTitle": zod.string(),
+  "sourceType": zod.enum(['pdf', 'pptx', 'video']),
+  "locator": zod.object({
+  "type": zod.enum(['page', 'slide', 'video']),
+  "page": zod.number().int().min(1).optional(),
+  "slide": zod.number().int().min(1).optional(),
+  "start_sec": zod.number().min(sendConversationMessageResponseAssistantMessageCitationsItemLocatorStartSecMin).optional(),
+  "end_sec": zod.number().min(sendConversationMessageResponseAssistantMessageCitationsItemLocatorEndSecMin).optional(),
+  "imagePath": zod.string().nullish()
+}),
+  "excerpt": zod.string()
+})),
+  "createdAt": zod.coerce.date()
+}),
+  "supportStatus": zod.enum(['supported', 'insufficient_context'])
+})
+
+
+/**
+ * @summary List practice assessments
+ */
+export const ListCourseAssessmentsParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const ListCourseAssessmentsResponseItem = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "title": zod.string(),
+  "difficulty": zod.enum(['easy', 'medium', 'hard']),
+  "questionCount": zod.number().int(),
+  "attemptCount": zod.number().int(),
+  "bestScore": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCourseAssessmentsResponse = zod.array(ListCourseAssessmentsResponseItem)
+
+
+/**
+ * @summary Generate a source-grounded practice assessment
+ */
+export const CreateCourseAssessmentParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const createCourseAssessmentBodyQuestionCountDefault = 5;
+export const createCourseAssessmentBodyQuestionCountMin = 2;
+export const createCourseAssessmentBodyQuestionCountMax = 15;
+
+export const createCourseAssessmentBodyDifficultyDefault = `medium`;
+
+export const CreateCourseAssessmentBody = zod.object({
+  "questionCount": zod.number().int().min(createCourseAssessmentBodyQuestionCountMin).max(createCourseAssessmentBodyQuestionCountMax).default(createCourseAssessmentBodyQuestionCountDefault),
+  "difficulty": zod.enum(['easy', 'medium', 'hard']).default(createCourseAssessmentBodyDifficultyDefault),
+  "topicId": zod.string().nullish()
+})
+
+export const createCourseAssessmentResponseTwoQuestionsItemOptionsMin = 2;
+
+
+
+export const createCourseAssessmentResponseTwoQuestionsItemCitationsItemLocatorStartSecMin = 0;
+
+export const createCourseAssessmentResponseTwoQuestionsItemCitationsItemLocatorEndSecMin = 0;
+
+
+
+export const CreateCourseAssessmentResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "title": zod.string(),
+  "difficulty": zod.enum(['easy', 'medium', 'hard']),
+  "questionCount": zod.number().int(),
+  "attemptCount": zod.number().int(),
+  "bestScore": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "questions": zod.array(zod.object({
+  "id": zod.string(),
+  "prompt": zod.string(),
+  "options": zod.array(zod.string()).min(createCourseAssessmentResponseTwoQuestionsItemOptionsMin),
+  "citations": zod.array(zod.object({
+  "unitId": zod.string(),
+  "sourceId": zod.string(),
+  "sourceTitle": zod.string(),
+  "sourceType": zod.enum(['pdf', 'pptx', 'video']),
+  "locator": zod.object({
+  "type": zod.enum(['page', 'slide', 'video']),
+  "page": zod.number().int().min(1).optional(),
+  "slide": zod.number().int().min(1).optional(),
+  "start_sec": zod.number().min(createCourseAssessmentResponseTwoQuestionsItemCitationsItemLocatorStartSecMin).optional(),
+  "end_sec": zod.number().min(createCourseAssessmentResponseTwoQuestionsItemCitationsItemLocatorEndSecMin).optional(),
+  "imagePath": zod.string().nullish()
+}),
+  "excerpt": zod.string()
+}))
+}))
+}))
+
+
+/**
+ * @summary Get an assessment without revealing its answer key
+ */
+export const GetAssessmentParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const getAssessmentResponseTwoQuestionsItemOptionsMin = 2;
+
+
+
+export const getAssessmentResponseTwoQuestionsItemCitationsItemLocatorStartSecMin = 0;
+
+export const getAssessmentResponseTwoQuestionsItemCitationsItemLocatorEndSecMin = 0;
+
+
+
+export const GetAssessmentResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "title": zod.string(),
+  "difficulty": zod.enum(['easy', 'medium', 'hard']),
+  "questionCount": zod.number().int(),
+  "attemptCount": zod.number().int(),
+  "bestScore": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "questions": zod.array(zod.object({
+  "id": zod.string(),
+  "prompt": zod.string(),
+  "options": zod.array(zod.string()).min(getAssessmentResponseTwoQuestionsItemOptionsMin),
+  "citations": zod.array(zod.object({
+  "unitId": zod.string(),
+  "sourceId": zod.string(),
+  "sourceTitle": zod.string(),
+  "sourceType": zod.enum(['pdf', 'pptx', 'video']),
+  "locator": zod.object({
+  "type": zod.enum(['page', 'slide', 'video']),
+  "page": zod.number().int().min(1).optional(),
+  "slide": zod.number().int().min(1).optional(),
+  "start_sec": zod.number().min(getAssessmentResponseTwoQuestionsItemCitationsItemLocatorStartSecMin).optional(),
+  "end_sec": zod.number().min(getAssessmentResponseTwoQuestionsItemCitationsItemLocatorEndSecMin).optional(),
+  "imagePath": zod.string().nullish()
+}),
+  "excerpt": zod.string()
+}))
+}))
+}))
+
+
+/**
+ * @summary List the signed-in learner's attempts
+ */
+export const ListAssessmentAttemptsParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const listAssessmentAttemptsResponseScoreMin = 0;
+
+
+export const listAssessmentAttemptsResponsePercentageMin = 0;
+export const listAssessmentAttemptsResponsePercentageMax = 100;
+
+export const listAssessmentAttemptsResponseFeedbackItemSelectedOptionMin = 0;
+
+export const listAssessmentAttemptsResponseFeedbackItemCorrectOptionMin = 0;
+
+
+
+export const listAssessmentAttemptsResponseFeedbackItemCitationsItemLocatorStartSecMin = 0;
+
+export const listAssessmentAttemptsResponseFeedbackItemCitationsItemLocatorEndSecMin = 0;
+
+
+
+export const ListAssessmentAttemptsResponseItem = zod.object({
+  "id": zod.string(),
+  "assessmentId": zod.string(),
+  "score": zod.number().int().min(listAssessmentAttemptsResponseScoreMin),
+  "total": zod.number().int().min(1),
+  "percentage": zod.number().min(listAssessmentAttemptsResponsePercentageMin).max(listAssessmentAttemptsResponsePercentageMax),
+  "feedback": zod.array(zod.object({
+  "questionId": zod.string(),
+  "selectedOption": zod.number().int().min(listAssessmentAttemptsResponseFeedbackItemSelectedOptionMin).nullable(),
+  "correctOption": zod.number().int().min(listAssessmentAttemptsResponseFeedbackItemCorrectOptionMin),
+  "isCorrect": zod.boolean(),
+  "explanation": zod.string(),
+  "citations": zod.array(zod.object({
+  "unitId": zod.string(),
+  "sourceId": zod.string(),
+  "sourceTitle": zod.string(),
+  "sourceType": zod.enum(['pdf', 'pptx', 'video']),
+  "locator": zod.object({
+  "type": zod.enum(['page', 'slide', 'video']),
+  "page": zod.number().int().min(1).optional(),
+  "slide": zod.number().int().min(1).optional(),
+  "start_sec": zod.number().min(listAssessmentAttemptsResponseFeedbackItemCitationsItemLocatorStartSecMin).optional(),
+  "end_sec": zod.number().min(listAssessmentAttemptsResponseFeedbackItemCitationsItemLocatorEndSecMin).optional(),
+  "imagePath": zod.string().nullish()
+}),
+  "excerpt": zod.string()
+}))
+})),
+  "createdAt": zod.coerce.date()
+})
+export const ListAssessmentAttemptsResponse = zod.array(ListAssessmentAttemptsResponseItem)
+
+
+/**
+ * @summary Grade a completed practice assessment
+ */
+export const SubmitAssessmentAttemptParams = zod.object({
+  "assessmentId": zod.coerce.string()
+})
+
+export const submitAssessmentAttemptBodyAnswersItemSelectedOptionMin = 0;
+
+
+
+
+export const SubmitAssessmentAttemptBody = zod.object({
+  "answers": zod.array(zod.object({
+  "questionId": zod.string(),
+  "selectedOption": zod.number().int().min(submitAssessmentAttemptBodyAnswersItemSelectedOptionMin).nullable()
+})).min(1)
+})
+
+export const submitAssessmentAttemptResponseScoreMin = 0;
+
+
+export const submitAssessmentAttemptResponsePercentageMin = 0;
+export const submitAssessmentAttemptResponsePercentageMax = 100;
+
+export const submitAssessmentAttemptResponseFeedbackItemSelectedOptionMin = 0;
+
+export const submitAssessmentAttemptResponseFeedbackItemCorrectOptionMin = 0;
+
+
+
+export const submitAssessmentAttemptResponseFeedbackItemCitationsItemLocatorStartSecMin = 0;
+
+export const submitAssessmentAttemptResponseFeedbackItemCitationsItemLocatorEndSecMin = 0;
+
+
+
+export const SubmitAssessmentAttemptResponse = zod.object({
+  "id": zod.string(),
+  "assessmentId": zod.string(),
+  "score": zod.number().int().min(submitAssessmentAttemptResponseScoreMin),
+  "total": zod.number().int().min(1),
+  "percentage": zod.number().min(submitAssessmentAttemptResponsePercentageMin).max(submitAssessmentAttemptResponsePercentageMax),
+  "feedback": zod.array(zod.object({
+  "questionId": zod.string(),
+  "selectedOption": zod.number().int().min(submitAssessmentAttemptResponseFeedbackItemSelectedOptionMin).nullable(),
+  "correctOption": zod.number().int().min(submitAssessmentAttemptResponseFeedbackItemCorrectOptionMin),
+  "isCorrect": zod.boolean(),
+  "explanation": zod.string(),
+  "citations": zod.array(zod.object({
+  "unitId": zod.string(),
+  "sourceId": zod.string(),
+  "sourceTitle": zod.string(),
+  "sourceType": zod.enum(['pdf', 'pptx', 'video']),
+  "locator": zod.object({
+  "type": zod.enum(['page', 'slide', 'video']),
+  "page": zod.number().int().min(1).optional(),
+  "slide": zod.number().int().min(1).optional(),
+  "start_sec": zod.number().min(submitAssessmentAttemptResponseFeedbackItemCitationsItemLocatorStartSecMin).optional(),
+  "end_sec": zod.number().min(submitAssessmentAttemptResponseFeedbackItemCitationsItemLocatorEndSecMin).optional(),
+  "imagePath": zod.string().nullish()
+}),
+  "excerpt": zod.string()
+}))
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get concept mastery, reviews, and assessment history
+ */
+export const GetCourseLearningProgressParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const getCourseLearningProgressResponseAverageScoreMin = 0;
+export const getCourseLearningProgressResponseAverageScoreMax = 100;
+
+export const getCourseLearningProgressResponseConceptsItemConfidenceMin = 0;
+export const getCourseLearningProgressResponseConceptsItemConfidenceMax = 5;
+
+
+
+export const GetCourseLearningProgressResponse = zod.object({
+  "courseId": zod.string(),
+  "totalConcepts": zod.number().int(),
+  "masteredConcepts": zod.number().int(),
+  "learningConcepts": zod.number().int(),
+  "newConcepts": zod.number().int(),
+  "dueConcepts": zod.number().int(),
+  "assessmentCount": zod.number().int(),
+  "attemptCount": zod.number().int(),
+  "averageScore": zod.number().min(getCourseLearningProgressResponseAverageScoreMin).max(getCourseLearningProgressResponseAverageScoreMax).nullable(),
+  "concepts": zod.array(zod.object({
+  "conceptId": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullable(),
+  "topicId": zod.string().nullable(),
+  "topicName": zod.string().nullable(),
+  "confidence": zod.number().int().min(getCourseLearningProgressResponseConceptsItemConfidenceMin).max(getCourseLearningProgressResponseConceptsItemConfidenceMax),
+  "mastery": zod.enum(['new', 'learning', 'mastered']),
+  "lastReviewedAt": zod.coerce.date().nullable(),
+  "nextReviewAt": zod.coerce.date().nullable()
+})),
+  "recentAttempts": zod.array(zod.object({
+  "id": zod.string(),
+  "assessmentTitle": zod.string(),
+  "score": zod.number().int(),
+  "total": zod.number().int(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Record learner confidence for a concept
+ */
+export const UpdateConceptProgressParams = zod.object({
+  "courseId": zod.coerce.string(),
+  "conceptId": zod.coerce.string()
+})
+
+export const updateConceptProgressBodyConfidenceMin = 0;
+export const updateConceptProgressBodyConfidenceMax = 5;
+
+
+
+export const UpdateConceptProgressBody = zod.object({
+  "confidence": zod.number().int().min(updateConceptProgressBodyConfidenceMin).max(updateConceptProgressBodyConfidenceMax)
+})
+
+export const updateConceptProgressResponseConfidenceMin = 0;
+export const updateConceptProgressResponseConfidenceMax = 5;
+
+
+
+export const UpdateConceptProgressResponse = zod.object({
+  "conceptId": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullable(),
+  "topicId": zod.string().nullable(),
+  "topicName": zod.string().nullable(),
+  "confidence": zod.number().int().min(updateConceptProgressResponseConfidenceMin).max(updateConceptProgressResponseConfidenceMax),
+  "mastery": zod.enum(['new', 'learning', 'mastered']),
+  "lastReviewedAt": zod.coerce.date().nullable(),
+  "nextReviewAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Download a source-linked Markdown study guide
+ */
+export const ExportCourseMarkdownParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const ExportCourseMarkdownResponse = zod.unknown()
+
+
+/**
+ * @summary Download source-linked course units as CSV
+ */
+export const ExportCourseCsvParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const ExportCourseCsvResponse = zod.unknown()
 
 

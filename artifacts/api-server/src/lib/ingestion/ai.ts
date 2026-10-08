@@ -7,6 +7,8 @@ import { aiCacheTable } from "@workspace/db/schema";
 export const modelConfig = {
   structure: process.env.STUDYGRAPH_STRUCTURE_MODEL ?? "gpt-4.1-mini",
   vision: process.env.STUDYGRAPH_VISION_MODEL ?? "gpt-4.1-mini",
+  tutor: process.env.STUDYGRAPH_TUTOR_MODEL ?? "gpt-4.1-mini",
+  assessment: process.env.STUDYGRAPH_ASSESSMENT_MODEL ?? "gpt-4.1-mini",
   embedding: process.env.STUDYGRAPH_EMBEDDING_MODEL ?? "text-embedding-3-small",
   transcription: process.env.STUDYGRAPH_TRANSCRIPTION_MODEL ?? "whisper-1",
 };

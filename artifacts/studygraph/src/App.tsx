@@ -24,7 +24,7 @@ const signInPath = '/sign-in';
 const signUpPath = '/sign-up';
 const clerkSignInPath = `${BASE}/sign-in`;
 const clerkSignUpPath = `${BASE}/sign-up`;
-const sourceAccept = '.pdf,.pptx,.mp4,.mov,.m4v,.webm,.avi,.mkv,.mpeg,.mpg';
+const sourceAccept = '.pdf,.pptx,.mp4,.mov,.m4v,.webm,.avi,.mkv,.mpeg,.mpg,.3gp,.wmv,.flv,.m2ts';
 const sameOriginRequest = { credentials: 'same-origin' as const };
 
 function Brand({ inverse = false }: { inverse?: boolean }) {
@@ -222,7 +222,7 @@ function classifyFile(file: File): SourceSourceType | null {
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext === 'pdf' || file.type === 'application/pdf') return 'pdf';
   if (ext === 'pptx' || file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return 'pptx';
-  if (['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'mpeg', 'mpg'].includes(ext ?? '') || file.type.startsWith('video/')) return 'video';
+  if (['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'mpeg', 'mpg', '3gp', 'wmv', 'flv', 'm2ts'].includes(ext ?? '') || file.type.startsWith('video/')) return 'video';
   return null;
 }
 

@@ -18,6 +18,14 @@ tags:
     description: Source processing jobs
   - name: storage
     description: Persistent upload storage
+  - name: tutoring
+    description: Source-grounded tutoring conversations
+  - name: assessments
+    description: Practice assessments and answer review
+  - name: learning
+    description: Persistent concept mastery and course progress
+  - name: exports
+    description: Downloadable source-linked course exports
 paths:
   /healthz:
     get:
@@ -217,6 +225,260 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UploadUrl"
+  /courses/{courseId}/conversations:
+    get:
+      operationId: listStudyConversations
+      tags: [tutoring]
+      summary: List tutoring conversations for a course
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Conversation" }
+    post:
+      operationId: createStudyConversation
+      tags: [tutoring]
+      summary: Create a tutoring conversation
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversationInput" }
+      responses:
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Conversation" }
+        "404": { description: Course not found }
+  /conversations/{conversationId}/messages:
+    get:
+      operationId: listConversationMessages
+      tags: [tutoring]
+      summary: Read messages and their source citations
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Conversation messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ConversationMessage" }
+        "404": { description: Conversation not found }
+    post:
+      operationId: sendConversationMessage
+      tags: [tutoring]
+      summary: Ask a question grounded in course sources
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversationMessageInput" }
+      responses:
+        "200":
+          description: Saved user and assistant messages
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TutorReply" }
+        "404": { description: Conversation not found }
+        "503": { description: No supporting course material or AI provider unavailable }
+  /courses/{courseId}/assessments:
+    get:
+      operationId: listCourseAssessments
+      tags: [assessments]
+      summary: List practice assessments
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssessmentSummary" }
+    post:
+      operationId: createCourseAssessment
+      tags: [assessments]
+      summary: Generate a source-grounded practice assessment
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentInput" }
+      responses:
+        "201":
+          description: Assessment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentDetail" }
+        "404": { description: Course or topic not found }
+        "409": { description: Course has no ready study units }
+  /assessments/{assessmentId}:
+    get:
+      operationId: getAssessment
+      tags: [assessments]
+      summary: Get an assessment without revealing its answer key
+      parameters:
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentDetail" }
+        "404": { description: Assessment not found }
+  /assessments/{assessmentId}/attempts:
+    get:
+      operationId: listAssessmentAttempts
+      tags: [assessments]
+      summary: List the signed-in learner's attempts
+      parameters:
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Attempts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssessmentAttempt" }
+        "404": { description: Assessment not found }
+    post:
+      operationId: submitAssessmentAttempt
+      tags: [assessments]
+      summary: Grade a completed practice assessment
+      parameters:
+        - in: path
+          name: assessmentId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentAnswersInput" }
+      responses:
+        "201":
+          description: Graded attempt with explanations and citations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentAttempt" }
+        "404": { description: Assessment not found }
+  /courses/{courseId}/progress:
+    get:
+      operationId: getCourseLearningProgress
+      tags: [learning]
+      summary: Get concept mastery, reviews, and assessment history
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Learning progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseLearningProgress" }
+        "404": { description: Course not found }
+  /courses/{courseId}/concepts/{conceptId}/progress:
+    patch:
+      operationId: updateConceptProgress
+      tags: [learning]
+      summary: Record learner confidence for a concept
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: conceptId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConceptProgressInput" }
+      responses:
+        "200":
+          description: Updated concept progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConceptProgress" }
+        "404": { description: Concept not found in course }
+  /courses/{courseId}/export/markdown:
+    get:
+      operationId: exportCourseMarkdown
+      tags: [exports]
+      summary: Download a source-linked Markdown study guide
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Downloadable Markdown study guide
+          content:
+            text/markdown:
+              schema: { type: string }
+        "404": { description: Course not found }
+  /courses/{courseId}/export/csv:
+    get:
+      operationId: exportCourseCsv
+      tags: [exports]
+      summary: Download source-linked course units as CSV
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Downloadable source-linked CSV
+          content:
+            text/csv:
+              schema: { type: string }
+        "404": { description: Course not found }
 components:
   schemas:
     HealthStatus:
@@ -365,4 +627,187 @@ components:
         uploadURL: { type: string, format: uri }
         objectPath: { type: string }
       required: [uploadURL, objectPath]
+    SourceCitation:
+      type: object
+      properties:
+        unitId: { type: string }
+        sourceId: { type: string }
+        sourceTitle: { type: string }
+        sourceType: { type: string, enum: [pdf, pptx, video] }
+        locator:
+          type: object
+          properties:
+            type: { type: string, enum: [page, slide, video] }
+            page: { type: integer, minimum: 1 }
+            slide: { type: integer, minimum: 1 }
+            start_sec: { type: number, minimum: 0 }
+            end_sec: { type: number, minimum: 0 }
+            imagePath: { type: ["string", "null"] }
+          required: [type]
+        excerpt: { type: string }
+      required: [unitId, sourceId, sourceTitle, sourceType, locator, excerpt]
+    ConversationInput:
+      type: object
+      properties:
+        title: { type: string, maxLength: 160 }
+    Conversation:
+      type: object
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        title: { type: string }
+        messageCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, courseId, title, messageCount, createdAt, updatedAt]
+    ConversationMessageInput:
+      type: object
+      properties:
+        content: { type: string, minLength: 2, maxLength: 6000 }
+      required: [content]
+    ConversationMessage:
+      type: object
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/SourceCitation" }
+        createdAt: { type: string, format: date-time }
+      required: [id, role, content, citations, createdAt]
+    TutorReply:
+      type: object
+      properties:
+        userMessage: { $ref: "#/components/schemas/ConversationMessage" }
+        assistantMessage: { $ref: "#/components/schemas/ConversationMessage" }
+        supportStatus: { type: string, enum: [supported, insufficient_context] }
+      required: [userMessage, assistantMessage, supportStatus]
+    AssessmentInput:
+      type: object
+      properties:
+        questionCount: { type: integer, minimum: 2, maximum: 15, default: 5 }
+        difficulty: { type: string, enum: [easy, medium, hard], default: medium }
+        topicId: { type: ["string", "null"] }
+      required: [questionCount, difficulty]
+    AssessmentQuestion:
+      type: object
+      properties:
+        id: { type: string }
+        prompt: { type: string }
+        options:
+          type: array
+          minItems: 2
+          items: { type: string }
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/SourceCitation" }
+      required: [id, prompt, options, citations]
+    AssessmentSummary:
+      type: object
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        title: { type: string }
+        difficulty: { type: string, enum: [easy, medium, hard] }
+        questionCount: { type: integer }
+        attemptCount: { type: integer }
+        bestScore: { type: ["number", "null"] }
+        createdAt: { type: string, format: date-time }
+      required:
+        [id, courseId, title, difficulty, questionCount, attemptCount, bestScore, createdAt]
+    AssessmentDetail:
+      allOf:
+        - $ref: "#/components/schemas/AssessmentSummary"
+        - type: object
+          properties:
+            questions:
+              type: array
+              items: { $ref: "#/components/schemas/AssessmentQuestion" }
+          required: [questions]
+    AssessmentAnswersInput:
+      type: object
+      properties:
+        answers:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            properties:
+              questionId: { type: string }
+              selectedOption: { type: ["integer", "null"], minimum: 0 }
+            required: [questionId, selectedOption]
+      required: [answers]
+    AssessmentQuestionFeedback:
+      type: object
+      properties:
+        questionId: { type: string }
+        selectedOption: { type: ["integer", "null"], minimum: 0 }
+        correctOption: { type: integer, minimum: 0 }
+        isCorrect: { type: boolean }
+        explanation: { type: string }
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/SourceCitation" }
+      required: [questionId, selectedOption, correctOption, isCorrect, explanation, citations]
+    AssessmentAttempt:
+      type: object
+      properties:
+        id: { type: string }
+        assessmentId: { type: string }
+        score: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 1 }
+        percentage: { type: number, minimum: 0, maximum: 100 }
+        feedback:
+          type: array
+          items: { $ref: "#/components/schemas/AssessmentQuestionFeedback" }
+        createdAt: { type: string, format: date-time }
+      required: [id, assessmentId, score, total, percentage, feedback, createdAt]
+    ConceptProgressInput:
+      type: object
+      properties:
+        confidence: { type: integer, minimum: 0, maximum: 5 }
+      required: [confidence]
+    ConceptProgress:
+      type: object
+      properties:
+        conceptId: { type: string }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        topicId: { type: ["string", "null"] }
+        topicName: { type: ["string", "null"] }
+        confidence: { type: integer, minimum: 0, maximum: 5 }
+        mastery: { type: string, enum: [new, learning, mastered] }
+        lastReviewedAt: { type: ["string", "null"], format: date-time }
+        nextReviewAt: { type: ["string", "null"], format: date-time }
+      required:
+        [conceptId, name, description, topicId, topicName, confidence, mastery, lastReviewedAt, nextReviewAt]
+    CourseLearningProgress:
+      type: object
+      properties:
+        courseId: { type: string }
+        totalConcepts: { type: integer }
+        masteredConcepts: { type: integer }
+        learningConcepts: { type: integer }
+        newConcepts: { type: integer }
+        dueConcepts: { type: integer }
+        assessmentCount: { type: integer }
+        attemptCount: { type: integer }
+        averageScore: { type: ["number", "null"], minimum: 0, maximum: 100 }
+        concepts:
+          type: array
+          items: { $ref: "#/components/schemas/ConceptProgress" }
+        recentAttempts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              assessmentTitle: { type: string }
+              score: { type: integer }
+              total: { type: integer }
+              createdAt: { type: string, format: date-time }
+            required: [id, assessmentTitle, score, total, createdAt]
+      required:
+        [courseId, totalConcepts, masteredConcepts, learningConcepts, newConcepts, dueConcepts, assessmentCount, attemptCount, averageScore, concepts, recentAttempts]
 

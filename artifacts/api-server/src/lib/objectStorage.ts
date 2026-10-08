@@ -227,6 +227,19 @@ export class ObjectStorageService {
     await file.delete({ ignoreNotFound: true });
   }
 
+  async deleteDerivedObjects(sourceId: string): Promise<void> {
+    const privateDir = this.getPrivateObjectDir().replace(/\/+$/, "");
+    const { bucketName, objectName } = parseObjectPath(
+      `${privateDir}/studygraph/${sourceId}/`,
+    );
+    const [files] = await objectStorageClient
+      .bucket(bucketName)
+      .getFiles({ prefix: objectName });
+    await Promise.all(
+      files.map((file) => file.delete({ ignoreNotFound: true })),
+    );
+  }
+
   async canAccessObjectEntity({
     userId,
     objectFile,

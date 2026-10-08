@@ -23,7 +23,7 @@ import {
   topicsTable,
   unitsTable,
 } from "@workspace/db/schema";
-import { queueIngestion } from "../lib/ingestion/worker";
+import { cancelIngestion, queueIngestion } from "../lib/ingestion/worker";
 import { ObjectPermission } from "../lib/objectAcl";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
@@ -44,6 +44,18 @@ const VIDEO_EXTENSIONS = new Set([
   ".wmv",
   ".flv",
   ".m2ts",
+]);
+const VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+  "video/x-matroska",
+  "video/mpeg",
+  "video/3gpp",
+  "video/x-ms-wmv",
+  "video/x-flv",
+  "video/mp2t",
 ]);
 
 function userId(res: Response): string {
@@ -142,7 +154,13 @@ function inferSourceType(
   ) {
     return "pptx";
   }
-  if (declaredType === "video" && VIDEO_EXTENSIONS.has(extension)) return "video";
+  const normalizedMimeType = mimeType.toLowerCase().split(";")[0].trim();
+  if (
+    declaredType === "video" &&
+    (VIDEO_EXTENSIONS.has(extension) || VIDEO_MIME_TYPES.has(normalizedMimeType))
+  ) {
+    return "video";
+  }
   return null;
 }
 
@@ -178,23 +196,26 @@ async function createSourceAndJob(input: {
   language: string;
 }) {
   const id = randomUUID();
-  const [source] = await db
-    .insert(sourcesTable)
-    .values({
+  const source = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(sourcesTable)
+      .values({
+        id,
+        ...input,
+        status: "queued",
+        progress: 0,
+        currentStep: "Waiting to start",
+        error: null,
+      })
+      .returning();
+    await tx.insert(ingestionJobsTable).values({
       id,
-      ...input,
+      sourceId: id,
       status: "queued",
       progress: 0,
       currentStep: "Waiting to start",
-      error: null,
-    })
-    .returning();
-  await db.insert(ingestionJobsTable).values({
-    id,
-    sourceId: id,
-    status: "queued",
-    progress: 0,
-    currentStep: "Waiting to start",
+    });
+    return created;
   });
   setImmediate(() => queueIngestion(id));
   return source;
@@ -444,20 +465,13 @@ router.delete("/sources/:sourceId", async (req: Request, res: Response) => {
       res.status(404).json({ error: "Source not found." });
       return;
     }
-    const units = await db
-      .select({ locator: unitsTable.locator })
-      .from(unitsTable)
-      .where(eq(unitsTable.sourceId, sourceId));
-    const paths = units
-      .map((unit) => unit.locator.imagePath)
-      .filter((path): path is string => Boolean(path));
-    if (source.storagePath) paths.push(source.storagePath);
-    for (const path of new Set(paths)) {
-      await storage.deleteObjectEntity(path).catch((error) =>
-        logger.warn(
-          { sourceId, error },
-          "Could not remove one private StudyGraph file",
-        ),
+    cancelIngestion(sourceId);
+    await storage.deleteDerivedObjects(sourceId).catch((error) =>
+      logger.warn({ sourceId, error }, "Could not remove derived source images"),
+    );
+    if (source.storagePath) {
+      await storage.deleteObjectEntity(source.storagePath).catch((error) =>
+        logger.warn({ sourceId, error }, "Could not remove the uploaded source"),
       );
     }
     await db.delete(sourcesTable).where(eq(sourcesTable.id, sourceId));

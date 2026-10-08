@@ -8,7 +8,7 @@ StudyGraph turns course files and lectures into a searchable, source-linked stud
 - Upload PDF, PPTX, and common video files directly to private App Storage through short-lived signed URLs.
 - Add YouTube videos by URL.
 - Persist source records, job status, progress, failures, extracted units, and the topic/concept graph in PostgreSQL.
-- Extract document text and speaker notes; render PDF pages and PPTX slides; sample and caption meaningful visuals.
+- Extract document text and speaker notes; use source-grounded vision OCR for scanned pages and image-only slide text; render PDF pages and PPTX slides; sample and caption meaningful visuals.
 - Extract video audio, transcribe with source timestamps, and attach sampled visual frames to time-linked units.
 - Store multilingual-capable text embeddings in pgvector and cache AI results by model and SHA-256 source content.
 - Merge duplicate course concepts by normalized labels and attach prerequisite edges only when supported by the source units.
@@ -32,10 +32,10 @@ Model names are read from environment variables and can be changed without editi
 | --- | --- | --- |
 | `STUDYGRAPH_STRUCTURE_MODEL` | `gpt-4.1-mini` | Source-grounded topics, concepts, and prerequisite candidates |
 | `STUDYGRAPH_VISION_MODEL` | `gpt-4.1-mini` | Captions for rendered document and video frames |
-| `STUDYGRAPH_EMBEDDING_MODEL` | `text-embedding-3-small` | Unit embeddings |
+| `STUDYGRAPH_EMBEDDING_MODEL` | `text-embedding-3-small` | Unit embeddings (the text-embedding-3 family is requested at 1,536 dimensions) |
 | `STUDYGRAPH_TRANSCRIPTION_MODEL` | `whisper-1` | Timestamped video transcription |
 
-The vector index is fixed at 1,536 dimensions to match the default embedding model. Use a configured model that can return 1,536 dimensions. Changing dimensions requires a schema migration, re-embedding existing units, and rebuilding the index.
+The vector index is fixed at 1,536 dimensions to match the default embedding model. The text-embedding-3 family is requested at that dimension. Other configured models must return 1,536 dimensions. Changing dimensions requires a schema migration, re-embedding existing units, and rebuilding the index.
 
 ## Development
 
@@ -44,7 +44,13 @@ pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/studygraph run dev
 ```
 
-Use the existing workflows in the workspace to run both services. After changing the API contract, run:
+Use the existing workflows in the workspace to run both services. Vite requires `PORT` and `BASE_PATH`; the StudyGraph workflow injects both. To run a production build directly from the shell, use:
+
+```bash
+PORT=5173 BASE_PATH=/studygraph pnpm --filter @workspace/studygraph run build
+```
+
+After changing the API contract, run:
 
 ```bash
 pnpm --filter @workspace/api-spec run codegen

@@ -1,0 +1,2 @@
+- [StudyGraph Vite dependency invalidation](studygraph-vite-dependency-invalidation.md) — package resolution can be current while Vite still serves an older optimized React bundle.
+- [pgvector HNSW dimensions](pgvector-hnsw-dimensions.md) — declare a fixed vector dimension before pushing an HNSW index.

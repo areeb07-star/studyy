@@ -167,6 +167,261 @@ export interface UploadUrl {
   objectPath: string;
 }
 
+export type SourceCitationSourceType = typeof SourceCitationSourceType[keyof typeof SourceCitationSourceType];
+
+
+export const SourceCitationSourceType = {
+  pdf: 'pdf',
+  pptx: 'pptx',
+  video: 'video',
+} as const;
+
+export type SourceCitationLocatorType = typeof SourceCitationLocatorType[keyof typeof SourceCitationLocatorType];
+
+
+export const SourceCitationLocatorType = {
+  page: 'page',
+  slide: 'slide',
+  video: 'video',
+} as const;
+
+export type SourceCitationLocator = {
+  type: SourceCitationLocatorType;
+  /** @minimum 1 */
+  page?: number;
+  /** @minimum 1 */
+  slide?: number;
+  /** @minimum 0 */
+  start_sec?: number;
+  /** @minimum 0 */
+  end_sec?: number;
+  /** @nullable */
+  imagePath?: string | null;
+};
+
+export interface SourceCitation {
+  unitId: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceType: SourceCitationSourceType;
+  locator: SourceCitationLocator;
+  excerpt: string;
+}
+
+export interface ConversationInput {
+  /** @maxLength 160 */
+  title?: string;
+}
+
+export interface Conversation {
+  id: string;
+  courseId: string;
+  title: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationMessageInput {
+  /**
+     * @minLength 2
+     * @maxLength 6000
+     */
+  content: string;
+}
+
+export type ConversationMessageRole = typeof ConversationMessageRole[keyof typeof ConversationMessageRole];
+
+
+export const ConversationMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface ConversationMessage {
+  id: string;
+  role: ConversationMessageRole;
+  content: string;
+  citations: SourceCitation[];
+  createdAt: string;
+}
+
+export type TutorReplySupportStatus = typeof TutorReplySupportStatus[keyof typeof TutorReplySupportStatus];
+
+
+export const TutorReplySupportStatus = {
+  supported: 'supported',
+  insufficient_context: 'insufficient_context',
+} as const;
+
+export interface TutorReply {
+  userMessage: ConversationMessage;
+  assistantMessage: ConversationMessage;
+  supportStatus: TutorReplySupportStatus;
+}
+
+export type AssessmentInputDifficulty = typeof AssessmentInputDifficulty[keyof typeof AssessmentInputDifficulty];
+
+
+export const AssessmentInputDifficulty = {
+  easy: 'easy',
+  medium: 'medium',
+  hard: 'hard',
+} as const;
+
+export interface AssessmentInput {
+  /**
+     * @minimum 2
+     * @maximum 15
+     */
+  questionCount: number;
+  difficulty: AssessmentInputDifficulty;
+  /** @nullable */
+  topicId?: string | null;
+}
+
+export interface AssessmentQuestion {
+  id: string;
+  prompt: string;
+  /** @minItems 2 */
+  options: string[];
+  citations: SourceCitation[];
+}
+
+export type AssessmentSummaryDifficulty = typeof AssessmentSummaryDifficulty[keyof typeof AssessmentSummaryDifficulty];
+
+
+export const AssessmentSummaryDifficulty = {
+  easy: 'easy',
+  medium: 'medium',
+  hard: 'hard',
+} as const;
+
+export interface AssessmentSummary {
+  id: string;
+  courseId: string;
+  title: string;
+  difficulty: AssessmentSummaryDifficulty;
+  questionCount: number;
+  attemptCount: number;
+  /** @nullable */
+  bestScore: number | null;
+  createdAt: string;
+}
+
+export type AssessmentDetail = AssessmentSummary & {
+  questions: AssessmentQuestion[];
+};
+
+export type AssessmentAnswersInputAnswersItem = {
+  questionId: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  selectedOption: number | null;
+};
+
+export interface AssessmentAnswersInput {
+  /** @minItems 1 */
+  answers: AssessmentAnswersInputAnswersItem[];
+}
+
+export interface AssessmentQuestionFeedback {
+  questionId: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  selectedOption: number | null;
+  /** @minimum 0 */
+  correctOption: number;
+  isCorrect: boolean;
+  explanation: string;
+  citations: SourceCitation[];
+}
+
+export interface AssessmentAttempt {
+  id: string;
+  assessmentId: string;
+  /** @minimum 0 */
+  score: number;
+  /** @minimum 1 */
+  total: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  percentage: number;
+  feedback: AssessmentQuestionFeedback[];
+  createdAt: string;
+}
+
+export interface ConceptProgressInput {
+  /**
+     * @minimum 0
+     * @maximum 5
+     */
+  confidence: number;
+}
+
+export type ConceptProgressMastery = typeof ConceptProgressMastery[keyof typeof ConceptProgressMastery];
+
+
+export const ConceptProgressMastery = {
+  new: 'new',
+  learning: 'learning',
+  mastered: 'mastered',
+} as const;
+
+export interface ConceptProgress {
+  conceptId: string;
+  name: string;
+  /** @nullable */
+  description: string | null;
+  /** @nullable */
+  topicId: string | null;
+  /** @nullable */
+  topicName: string | null;
+  /**
+     * @minimum 0
+     * @maximum 5
+     */
+  confidence: number;
+  mastery: ConceptProgressMastery;
+  /** @nullable */
+  lastReviewedAt: string | null;
+  /** @nullable */
+  nextReviewAt: string | null;
+}
+
+export type CourseLearningProgressRecentAttemptsItem = {
+  id: string;
+  assessmentTitle: string;
+  score: number;
+  total: number;
+  createdAt: string;
+};
+
+export interface CourseLearningProgress {
+  courseId: string;
+  totalConcepts: number;
+  masteredConcepts: number;
+  learningConcepts: number;
+  newConcepts: number;
+  dueConcepts: number;
+  assessmentCount: number;
+  attemptCount: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     * @nullable
+     */
+  averageScore: number | null;
+  concepts: ConceptProgress[];
+  recentAttempts: CourseLearningProgressRecentAttemptsItem[];
+}
+
 export type ListSourcesParams = {
 courseId?: string;
 };
